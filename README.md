@@ -74,6 +74,32 @@ SimpleHA is a **simplified high availability cluster manager** inspired by [Pace
 
 ## Installation
 
+### RHEL 8.5 / CentOS Stream 8 (Recommended)
+
+详细部署指南请查看: [部署文档](./docs/deployment/rhel8-deployment.md)
+
+**一键安装脚本:**
+
+```bash
+# 下载并运行安装脚本
+curl -O https://raw.githubusercontent.com/s20040521-glitch/simpleha/main/scripts/install_rhel8.sh
+chmod +x install_rhel8.sh
+sudo ./install_rhel8.sh
+```
+
+**手动安装:**
+
+```bash
+# 1. 安装依赖
+sudo dnf install -y gcc python39-devel python39-pip libffi-devel openssl-devel
+
+# 2. 安装 SimpleHA
+python3.9 -m pip install simpleha
+
+# 3. 生成配置
+simpleha config generate /etc/simpleha/ha.yaml
+```
+
 ### From PyPI
 
 ```bash
@@ -83,7 +109,7 @@ pip install simpleha
 ### From Source
 
 ```bash
-git clone https://github.com/your-org/simpleha.git
+git clone https://github.com/s20040521-glitch/simpleha.git
 cd simpleha
 pip install -e .
 ```
@@ -92,7 +118,7 @@ pip install -e .
 
 ```bash
 # Pull from GitHub Container Registry
-docker pull ghcr.io/your-org/simpleha:latest
+docker pull ghcr.io/s20040521-glitch/simpleha:latest
 
 # Or build locally
 docker build -t simpleha:latest .
