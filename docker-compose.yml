@@ -1,0 +1,147 @@
+# SimpleHA Docker Compose for Development & Testing
+# Two-node HA cluster simulation with arbitration disk
+
+services:
+  # Node 1 - Active node
+  simpleha-node1: &simpleha-node
+    image: ghcr.io/your-org/simpleha:latest
+    container_name: simpleha-node1
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - SIMPLEHA_NODE_NAME=node1
+      - SIMPLEHA_NODE_ADDRESS=simpleha-node1
+      - SIMPLEHA_CLUSTER_NAME=simpleha-cluster
+      - SIMPLEHA_LOG_LEVEL=INFO
+    volumes:
+      - ./config/ha.yaml:/etc/simpleha/ha.yaml:ro
+      - simpleha-data:/var/lib/simpleha
+      - arb-disk:/dev/arbitration  # Mount arbitration disk
+    networks:
+      - simpleha-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - redis
+      - arb-simulator
+
+  # Node 2 - Passive node
+  simpleha-node2: &simpleha-node
+    image: ghcr.io/your-org/simpleha:latest
+    container_name: simpleha-node2
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      - SIMPLEHA_NODE_NAME=node2
+      - SIMPLEHA_NODE_ADDRESS=simpleha-node2
+      - SIMPLEHA_CLUSTER_NAME=simpleha-cluster
+      - SIMPLEHA_LOG_LEVEL=INFO
+    volumes:
+      - ./config/ha.yaml:/etc/simpleha/ha.yaml:ro
+      - simpleha-data:/var/lib/simpleha
+      - arb-disk:/dev/arbitration  # Mount arbitration disk
+    networks:
+      - simpleha-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - redis
+      - arb-simulator
+
+  # Arbitration Disk Simulator (for testing)
+  # In production, use real iSCSI/FC target
+  arb-simulator:
+    image: ubuntu:22.04
+    container_name: simpleha-arb-simulator
+    command: >
+      bash -c "
+        apt-get update && apt-get install -y tiobench || true
+        while true; do
+          sleep 1
+        done
+      "
+    volumes:
+      - arb-disk:/arb
+    networks:
+      - simpleha-net
+    privileged: true
+
+  # Redis for state management
+  redis:
+    image: redis:7-alpine
+    container_name: simpleha-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - simpleha-net
+    command: redis-server --appendonly yes
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: simpleha-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - simpleha-net
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: simpleha-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - simpleha-net
+    depends_on:
+      - prometheus
+
+  # Alertmanager for alerting
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: simpleha-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - simpleha-net
+
+networks:
+  simpleha-net:
+    driver: bridge
+
+volumes:
+  simpleha-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:
+  arb-disk:  # Arbitration disk volume (simulates shared storage)
